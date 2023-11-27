@@ -5,7 +5,8 @@ from .views import (CreateDirectoryView,
                     DeleteDirectoryView,
                     DeleteFileView,
                     DataListView,
-                    DataFilesInDirectoryView)
+                    DataFilesInDirectoryView,
+                    ComparativeFileView)
 
 app_name = 'DesktopApp'
 
@@ -17,5 +18,6 @@ urlpatterns = [
     path('api/convert_csv/', ConvertExcelToCsvView.as_view(), name='convert_to_csv'),
     path('api/full_process/', FullProcessView.as_view(), name='full_process'),
     path('api/get/data_list/', DataListView.as_view(), name='data_list'),
-    path('api/get/data_directory/<id>/', DataFilesInDirectoryView.as_view(), name='data_directory')
+    path('api/get/data_directory/<id>/', DataFilesInDirectoryView.as_view(), name='data_directory'),
+    path('api/get/comparative/<id_1>/<id_2>/', ComparativeFileView.as_view(), name='comparative')
 ]

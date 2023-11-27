@@ -71,8 +71,9 @@ class FullProcessView(APIView):
                 name=name_directory
             )
         else:
-            return Response({'error': f"El directorio '{name_directory}' ya existe"},
-                            status=status.HTTP_404_NOT_FOUND)
+            directory = Directory.objects.get(name=name_directory)
+            # return Response({'error': f"El directorio '{name_directory}' ya existe"},
+            #                 status=status.HTTP_404_NOT_FOUND)
 
         for file in os.listdir(path):
             if file.endswith('.xlsx'):
@@ -154,3 +155,28 @@ class DataFilesInDirectoryView(APIView):
             return Response(dict_df, status=status.HTTP_200_OK)
         except Directory.DoesNotExist:
             return Response({'error': 'Directorio no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ComparativeFileView(APIView):
+
+    def get(self, id_1, id_2):
+        try:
+            directory = Directory.objects.get(pk=id)
+            files = File.objects.filter(directory=directory)
+            data_frames = []
+
+            for file in files:
+                bytes_data_file = BytesIO(pickle.loads(file.data_frame))
+                df = pd.read_pickle(bytes_data_file)
+                data_frames.append(df)
+
+            new_df = pd.concat(data_frames, ignore_index=True)
+            new_df = new_df.sort_values(by=['Time'])
+            new_df.columns = ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
+            print(new_df)
+
+        except:
+            return Response({'mssg': 'ok'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
