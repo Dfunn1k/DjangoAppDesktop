@@ -194,7 +194,7 @@ class ComparativeFileView(APIView):
 
             return Response(dict_df, status=status.HTTP_200_OK)
         except:
-            return Response({'mssg': 'ok'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'mssg: Hubo un error al realizar la comparativa'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
