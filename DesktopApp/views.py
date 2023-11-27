@@ -75,29 +75,42 @@ class FullProcessView(APIView):
             # return Response({'error': f"El directorio '{name_directory}' ya existe"},
             #                 status=status.HTTP_404_NOT_FOUND)
 
-        for file in os.listdir(path):
-            if file.endswith('.xlsx'):
-                file_path = os.path.join(path, file)
-                file_name = file.split('.')[0]
-                df = pd.read_excel(file_path, skiprows=1)
+        try:
+            for file in os.listdir(path):
+                if file.endswith('.xlsx') and not file.startswith('~$'):
+                    file_path = os.path.join(path, file)
+                    file_name = file.split('.')[0]
+                    df = pd.read_excel(file_path, skiprows=1)
 
-                try:
-                    df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
-                    df['Time'] = (df['Time'] - pd.Timestamp("1970-01-01")
-                                  ) // pd.Timedelta('1ms')
-                except ValueError:
-                    print(f"Error al convertir 'Time' a datetime en el archivo {file}")
+                    try:
+                        df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
+                        df['Time'] = (df['Time'] - pd.Timestamp("1970-01-01")
+                                      ) // pd.Timedelta('1ms')
+                    except ValueError:
+                        print(f"Error al convertir 'Time' a datetime en el archivo {file}")
 
-                if not File.objects.filter(directory=directory, name=file_name).exists():
-                    file_object = File.objects.create(
-                        name=file_name,  # Faja1 010321.csv ['Faja1 010321','.csv']
-                        data_frame=pickle.dumps(df_to_byte(df).read()),
-                        directory=directory
-                    )
+                    if not File.objects.filter(directory=directory, name=file_name).exists():
+                        file_object = File.objects.create(
+                            name=file_name,  # Faja1 010321.csv ['Faja1 010321','.csv']
+                            data_frame=pickle.dumps(df_to_byte(df).read()),
+                            directory=directory
+                        )
 
-                data_frames.append(df)
+                    data_frames.append(df)
+        except Exception as e:
+            directory.delete()
+            return Response({'error': f"Error al procesar el directorio '{name_directory}'",
+                             'mssg': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        new_df = pd.concat(data_frames, ignore_index=True)
+        try:
+            new_df = pd.concat(data_frames, ignore_index=True)
+        except ValueError as e:
+            directory.delete()
+            return Response({'error': f"Error al concatenar los archivos del directorio '{name_directory}'",
+                             'mssg': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         # new_df = new_df.sort_values(by=['Time'])
 
         dict_df = new_df.to_dict(orient='records')
@@ -159,24 +172,48 @@ class DataFilesInDirectoryView(APIView):
 
 class ComparativeFileView(APIView):
 
-    def get(self, id_1, id_2):
+    def get(self, request, id_1, id_2):
         try:
-            directory = Directory.objects.get(pk=id)
-            files = File.objects.filter(directory=directory)
-            data_frames = []
+            column_1 = ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
+            column_2 = ['Time', 'UAvg2', 'IAvg2', 'PTotAvg2', 'EngAvg2', 'TN2']
+            first_df = obtain_data_frames(id_1, column_1)
+            second_df = obtain_data_frames(id_2, column_2)
+            df_combined = pd.DataFrame()
 
-            for file in files:
-                bytes_data_file = BytesIO(pickle.loads(file.data_frame))
-                df = pd.read_pickle(bytes_data_file)
-                data_frames.append(df)
+            df_combined['Time'] = first_df['Time']
 
-            new_df = pd.concat(data_frames, ignore_index=True)
-            new_df = new_df.sort_values(by=['Time'])
-            new_df.columns = ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
-            print(new_df)
+            df_combined['UAvg'] = (first_df['UAvg1'] + second_df['UAvg2']) / 2
+            df_combined['IAvg'] = (first_df['IAvg1'] + second_df['IAvg2']) / 2
+            df_combined['PTotAvg'] = first_df['PTotAvg1'] + second_df['PTotAvg2']
+            df_combined['EngAvg'] = first_df['EngAvg1'] + second_df['EngAvg2']
+            df_combined['TN'] = (first_df['TN1'] + second_df['TN2']) / 2
 
+            df_combined = df_combined.fillna(0)
+
+            dict_df = df_combined.to_dict(orient='records')
+
+            return Response(dict_df, status=status.HTTP_200_OK)
         except:
             return Response({'mssg': 'ok'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
+# ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
+def obtain_data_frames(id, columns):
+
+    try:
+        directory = Directory.objects.get(pk=id)
+        files = File.objects.filter(directory=directory)
+        data_frames = []
+
+        for file in files:
+            bytes_data_file = BytesIO(pickle.loads(file.data_frame))
+            df = pd.read_pickle(bytes_data_file)
+            data_frames.append(df)
+
+        new_df = pd.concat(data_frames, ignore_index=True)
+        new_df = new_df.sort_values(by=['Time'])
+        new_df.columns = columns
+        return new_df
+    except:
+        return None
