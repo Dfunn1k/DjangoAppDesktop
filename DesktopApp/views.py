@@ -180,38 +180,33 @@ class ComparativeFileView(APIView):
     # [1, 2, 3, 4, 5]
     def post(self, request):
         array_id = request.data['array_id']
-        # Este array_id es un array de ids de directorios esta en json hay que confirmar
 
-        tmp_array = [18, 20]
-        lenght = len(tmp_array)
+        data_frames_list = []
 
-        columns = ['Time', 'UAvg', 'IAvg', 'PTotAvg', 'EngAvg', 'TN']
-        df_combined = pd.DataFrame(0, index=range(999), columns=columns)
+        for i in range(len(array_id)):
+            tmp_df = obtain_data_frames(array_id[i])
 
-        for i in range(lenght):
-            column_df = ['Time', f'UAvg', f'IAvg', f'PTotAvg', f'EngAvg', f'TN']
-            tmp_df = obtain_data_frames(array_id[i], column_df)
-            df_combined['Time'] = tmp_df['Time']
-            df_combined['PTotAvg'] += tmp_df[f'PTotAvg']
-            df_combined['EngAvg'] += tmp_df[f'EngAvg']
-            df_combined['UAvg'] += tmp_df[f'UAvg']
-            df_combined['IAvg'] += tmp_df[f'IAvg']
-            df_combined['TN'] += tmp_df[f'TN']
+            if tmp_df is not None:
+                data_frames_list.append(tmp_df)
 
-        df_combined['UAvg'] = df_combined['UAvg'] / lenght
-        df_combined['IAvg'] = df_combined['IAvg'] / lenght
-        df_combined['TN'] = df_combined['TN'] / lenght
+        if not data_frames_list:
+            return Response({'error': 'No hay datos para comparar'}, status=status.HTTP_404_NOT_FOUND)
 
-        # df_combined = df_combined.fillna(0)
+        concatenated_df = pd.concat(data_frames_list, ignore_index=True)
+        grouped_data = concatenated_df.groupby('Time')
 
-        dict_df = df_combined.to_dict(orient='records')
+        result_df = grouped_data.agg({'UAvg': 'mean', 'IAvg': 'mean', 'PTotAvg': 'sum', 'EngAvg': 'sum', 'TN': 'mean'})
+
+        result_df.reset_index(inplace=True)
+
+        dict_df = result_df.to_dict(orient='records')
 
         return Response(dict_df, status=status.HTTP_200_OK)
         # return Response({'mssg: Hubo un error al realizar la comparativa'}, status=status.HTTP_404_NOT_FOUND)
 
 
 # ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
-def obtain_data_frames(id, columns):
+def obtain_data_frames(id):
 
     try:
         directory = Directory.objects.get(pk=id)
@@ -225,7 +220,7 @@ def obtain_data_frames(id, columns):
 
         new_df = pd.concat(data_frames, ignore_index=True)
         new_df = new_df.sort_values(by=['Time'])
-        new_df.columns = columns
+        # new_df.columns = columns
         return new_df
     except:
         return None
