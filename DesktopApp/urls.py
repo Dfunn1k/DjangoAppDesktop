@@ -19,5 +19,5 @@ urlpatterns = [
     path('api/full_process/', FullProcessView.as_view(), name='full_process'),
     path('api/get/data_list/', DataListView.as_view(), name='data_list'),
     path('api/get/data_directory/<id>/', DataFilesInDirectoryView.as_view(), name='data_directory'),
-    path('api/get/comparative/<id_1>/<id_2>/', ComparativeFileView.as_view(), name='comparative')
+    path('api/get/comparative/', ComparativeFileView.as_view(), name='comparative')
 ]

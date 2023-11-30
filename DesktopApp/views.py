@@ -62,6 +62,7 @@ class FullProcessView(APIView):
 
     def post(self, request):
         path = unquote(request.data['path'])
+        extension = request.data['extension']
         data_frames = []
         name_directory = path.split('\\')[-1]
 
@@ -77,10 +78,14 @@ class FullProcessView(APIView):
 
         try:
             for file in os.listdir(path):
-                if file.endswith('.xlsx') and not file.startswith('~$'):
+                if file.endswith(extension) and not file.startswith('~$'):
                     file_path = os.path.join(path, file)
                     file_name = file.split('.')[0]
-                    df = pd.read_excel(file_path, skiprows=1)
+
+                    if extension == '.csv':
+                        df = pd.read_csv(file_path, parse_dates=['Time'])
+                    else:
+                        df = pd.read_excel(file_path, skiprows=1)
 
                     try:
                         df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
@@ -172,29 +177,39 @@ class DataFilesInDirectoryView(APIView):
 
 class ComparativeFileView(APIView):
 
-    def get(self, request, id_1, id_2):
-        try:
-            column_1 = ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
-            column_2 = ['Time', 'UAvg2', 'IAvg2', 'PTotAvg2', 'EngAvg2', 'TN2']
-            first_df = obtain_data_frames(id_1, column_1)
-            second_df = obtain_data_frames(id_2, column_2)
-            df_combined = pd.DataFrame()
+    # [1, 2, 3, 4, 5]
+    def post(self, request):
+        array_id = request.data['array_id']
+        # Este array_id es un array de ids de directorios esta en json hay que confirmar
 
-            df_combined['Time'] = first_df['Time']
+        lenght = len(array_id)
 
-            df_combined['UAvg'] = (first_df['UAvg1'] + second_df['UAvg2']) / 2
-            df_combined['IAvg'] = (first_df['IAvg1'] + second_df['IAvg2']) / 2
-            df_combined['PTotAvg'] = first_df['PTotAvg1'] + second_df['PTotAvg2']
-            df_combined['EngAvg'] = first_df['EngAvg1'] + second_df['EngAvg2']
-            df_combined['TN'] = (first_df['TN1'] + second_df['TN2']) / 2
+        columns = ['Time', 'UAvg', 'IAvg', 'PTotAvg', 'EngAvg', 'TN']
+        df_combined = pd.DataFrame(0, index=range(lenght), columns=columns)
 
-            df_combined = df_combined.fillna(0)
+        for i in range(lenght):
+            column_df = ['Time', f'UAvg{i}', f'IAvg{i}', f'PTotAvg{i}', f'EngAvg{i}', f'TN{i}']
+            # print(column_df)
+            tmp_df = obtain_data_frames(int(array_id[i]), column_df)
+            # print(tmp_df)
 
-            dict_df = df_combined.to_dict(orient='records')
+            df_combined['PTotAvg'] += tmp_df[f'PTotAvg{i}']
+            df_combined['EngAvg'] += tmp_df[f'EngAvg{i}']
+            df_combined['UAvg'] += tmp_df[f'UAvg{i}']
+            df_combined['IAvg'] += tmp_df[f'IAvg{i}']
+            df_combined['TN'] += tmp_df[f'TN{i}']
 
-            return Response(dict_df, status=status.HTTP_200_OK)
-        except:
-            return Response({'mssg: Hubo un error al realizar la comparativa'}, status=status.HTTP_404_NOT_FOUND)
+
+        df_combined['UAvg'] = df_combined['UAvg'] / lenght
+        df_combined['IAvg'] = df_combined['IAvg'] / lenght
+        df_combined['TN'] = df_combined['TN'] / lenght
+
+        df_combined = df_combined.fillna(0)
+
+        dict_df = df_combined.to_dict(orient='records')
+
+        return Response(dict_df, status=status.HTTP_200_OK)
+        # return Response({'mssg: Hubo un error al realizar la comparativa'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
