@@ -84,8 +84,11 @@ class FullProcessView(APIView):
 
                     if extension == '.csv':
                         df = pd.read_csv(file_path, parse_dates=['Time'])
-                    else:
+                    elif extension == '.xlsx':
                         df = pd.read_excel(file_path, skiprows=1)
+                    else:
+                        return Response({'error': f"El formato '{extension}' no es válido"},
+                                        status=status.HTTP_400_BAD_REQUEST)
 
                     try:
                         df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
@@ -116,7 +119,6 @@ class FullProcessView(APIView):
                              'mssg': str(e)},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # new_df = new_df.sort_values(by=['Time'])
 
         dict_df = new_df.to_dict(orient='records')
 
@@ -177,7 +179,6 @@ class DataFilesInDirectoryView(APIView):
 
 class ComparativeFileView(APIView):
 
-    # [1, 2, 3, 4, 5]
     def post(self, request):
         array_id = request.data['array_id']
 
@@ -202,10 +203,8 @@ class ComparativeFileView(APIView):
         dict_df = result_df.to_dict(orient='records')
 
         return Response(dict_df, status=status.HTTP_200_OK)
-        # return Response({'mssg: Hubo un error al realizar la comparativa'}, status=status.HTTP_404_NOT_FOUND)
 
 
-# ['Time', 'UAvg1', 'IAvg1', 'PTotAvg1', 'EngAvg1', 'TN1']
 def obtain_data_frames(id):
 
     try:
@@ -220,7 +219,6 @@ def obtain_data_frames(id):
 
         new_df = pd.concat(data_frames, ignore_index=True)
         new_df = new_df.sort_values(by=['Time'])
-        # new_df.columns = columns
         return new_df
     except:
         return None
