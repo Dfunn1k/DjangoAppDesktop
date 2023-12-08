@@ -15,11 +15,6 @@ class CreateDirectoryView(APIView):
 
     def post(self, request):
 
-        # data = {
-        #     'path': request.data['path'],
-        #     'name': unquote(request.data['path']).split('\\')[-1]
-        # }
-        # print(request.data)
         serializer = DirectoryCreateSerializer(data=request.data)
 
         if serializer.is_valid():
@@ -66,50 +61,60 @@ class FullProcessView(APIView):
         data_frames = []
         name_directory = path.split('\\')[-1]
 
-        if not Directory.objects.filter(name=name_directory).exists():
+        if Directory.objects.filter(name=name_directory).exists():
+            if Directory.objects.filter(name=name_directory, path=path).exists():
+                directory = Directory.objects.get(name=name_directory)
+            else:
+                return Response({
+                    'mssg': f"El directorio '{name_directory}' ya existe"},
+                    status=status.HTTP_400_BAD_REQUEST)
+        else:
             directory = Directory.objects.create(
                 path=path,
                 name=name_directory
             )
-        else:
-            directory = Directory.objects.get(name=name_directory)
-            # return Response({'error': f"El directorio '{name_directory}' ya existe"},
-            #                 status=status.HTTP_404_NOT_FOUND)
 
         try:
-            for file in os.listdir(path):
-                if file.endswith(extension) and not file.startswith('~$'):
-                    file_path = os.path.join(path, file)
-                    file_name = file.split('.')[0]
-
-                    if extension == '.csv':
-                        df = pd.read_csv(file_path, parse_dates=['Time'])
-                    elif extension == '.xlsx':
-                        df = pd.read_excel(file_path, skiprows=1)
-                    else:
-                        return Response({'error': f"El formato '{extension}' no es válido"},
-                                        status=status.HTTP_400_BAD_REQUEST)
-
-                    try:
-                        df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
-                        df['Time'] = (df['Time'] - pd.Timestamp("1970-01-01")
-                                      ) // pd.Timedelta('1ms')
-                    except ValueError:
-                        print(f"Error al convertir 'Time' a datetime en el archivo {file}")
-
-                    if not File.objects.filter(directory=directory, name=file_name).exists():
-                        file_object = File.objects.create(
-                            name=file_name,  # Faja1 010321.csv ['Faja1 010321','.csv']
-                            data_frame=pickle.dumps(df_to_byte(df).read()),
-                            directory=directory
-                        )
-
-                    data_frames.append(df)
-        except Exception as e:
-            directory.delete()
-            return Response({'error': f"Error al procesar el directorio '{name_directory}'",
-                             'mssg': str(e)},
+            files_in_directory = os.listdir(path)
+        except FileNotFoundError as e:
+            return Response({
+                                'mssg': f"No se encontró el directorio '{name_directory}'",
+                                'error': str(e)},
                             status=status.HTTP_400_BAD_REQUEST)
+        except OSError as e:
+            return Response({
+                'mssg': f"Hubo un problema al procesar el directorio '{name_directory}'",
+                'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        for file in files_in_directory:
+            if file.endswith(extension) and not file.startswith('~$'):
+                file_path = os.path.join(path, file)
+                file_name = file.split('.')[0]
+
+                if extension == '.csv':
+                    df = pd.read_csv(file_path, parse_dates=['Time'], sep=';')
+                elif extension == '.xlsx':
+                    df = pd.read_excel(file_path)
+                else:
+                    return Response({'error': f"El formato '{extension}' no es válido"},
+                                    status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    df['Time'] = pd.to_datetime(df['Time'], format='%d/%m/%Y %H:%M')
+                    df['Time'] = (df['Time'] - pd.Timestamp("1970-01-01")
+                                  ) // pd.Timedelta('1ms')
+                except ValueError:
+                    print(f"Error al convertir 'Time' a datetime en el archivo {file}")
+
+                if not File.objects.filter(directory=directory, name=file_name).exists():
+                    file_object = File.objects.create(
+                        name=file_name,  # Faja1 010321.csv ['Faja1 010321','.csv']
+                        data_frame=pickle.dumps(df_to_byte(df).read()),
+                        directory=directory
+                    )
+
+                data_frames.append(df)
 
         try:
             new_df = pd.concat(data_frames, ignore_index=True)
@@ -118,7 +123,6 @@ class FullProcessView(APIView):
             return Response({'error': f"Error al concatenar los archivos del directorio '{name_directory}'",
                              'mssg': str(e)},
                             status=status.HTTP_400_BAD_REQUEST)
-
 
         dict_df = new_df.to_dict(orient='records')
 
