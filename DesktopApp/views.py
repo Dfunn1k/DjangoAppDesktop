@@ -95,7 +95,7 @@ class FullProcessView(APIView):
                 if extension == '.csv':
                     df = pd.read_csv(file_path, parse_dates=['Time'], sep=';')
                 elif extension == '.xlsx':
-                    df = pd.read_excel(file_path)
+                    df = pd.read_excel(file_path, skiprows=1)
                 else:
                     return Response({'error': f"El formato '{extension}' no es válido"},
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -153,7 +153,7 @@ class ConvertExcelToCsvView(APIView):
 
                     # Tu lógica de procesamiento adicional aquí si es necesario
 
-                    df.to_csv(csv_path, index=False)
+                    df.to_csv(csv_path, index=False, sep=';')
                 except Exception as e:
                     print(f"Error al procesar el archivo {file}: {str(e)}")
 
